@@ -24,7 +24,7 @@ import Profile, {
 import * as util from 'util';
 import ProfileActions, { ProfileStatus } from './profileActions';
 import ProfileWriter from '@impl/metadata/writer/profileWriter';
-import SFPLogger, {LoggerLevel } from '@flxbl-io/sfp-logger';
+import SFPLogger, {LoggerLevel } from '@n8codes/sfp-logger';
 
 const unsupportedprofiles = [];
 

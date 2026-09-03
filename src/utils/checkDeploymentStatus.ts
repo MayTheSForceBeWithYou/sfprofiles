@@ -1,7 +1,7 @@
-import { Connection } from 'jsforce';
-import { DeployResult } from 'jsforce/lib/api/metadata';
+import { Connection } from '@jsforce/jsforce-node';
+import { DeployResult } from '@salesforce/source-deploy-retrieve';
 import { delay } from './delay';
-import SFPLogger, {LoggerLevel } from '@flxbl-io/sfp-logger';
+import SFPLogger, {LoggerLevel } from '@n8codes/sfp-logger';
 
 export async function checkDeploymentStatus(conn: Connection, retrievedId: string): Promise<DeployResult> {
     let metadata_result;

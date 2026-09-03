@@ -129,4 +129,16 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
-lib
+# compiled output (built on publish via prepublishOnly)
+lib/
+tsconfig.tsbuildinfo
+
+# unpacked npm pack
+/package/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# local working notes
+CURSOR_PLAN.md

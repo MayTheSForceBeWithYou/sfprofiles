@@ -1,7 +1,14 @@
 'use strict';
 
-// import sfprofiles from '..';
-// import { strict as assert } from 'assert';
+const fs = require('fs');
+const path = require('path');
 
-// assert.strictEqual(sfprofiles(), 'Hello from sfprofiles');
-// console.info("sfprofiles tests passed");
+describe('profileRetriever SOQL', () => {
+    it('selects Id and Name when fetching profile permissions', () => {
+        const source = fs.readFileSync(
+            path.join(__dirname, '../src/impl/metadata/retriever/profileRetriever.ts'),
+            'utf8'
+        );
+        expect(source).toContain('SELECT Id, Name, ${permissionStr} FROM Profile WHERE Name IN');
+    });
+});
