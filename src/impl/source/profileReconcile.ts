@@ -30,10 +30,12 @@ export default class ProfileReconcile extends ProfileActions {
             let reconciledProfiles = [];
             //Reconcile one first, then do the rest later to use cache for subsequent one
             if (profilesToReconcile.length > 1) {
-                reconciledProfiles = await this.runWorkers([profilesToReconcile[0]], destFolder);
+                reconciledProfiles = await this.runWorkers([profilesToReconcile[0]], destFolder, srcFolders);
                 profilesToReconcile.shift();
             }
-            reconciledProfiles = reconciledProfiles.concat(await this.runWorkers(profilesToReconcile, destFolder));
+            reconciledProfiles = reconciledProfiles.concat(
+                await this.runWorkers(profilesToReconcile, destFolder, srcFolders)
+            );
             return reconciledProfiles;
         } catch (err) {
             console.error(err);
@@ -41,7 +43,7 @@ export default class ProfileReconcile extends ProfileActions {
         }
     }
 
-    private runWorkers(profilesToReconcile: ProfileSourceFile[], destFolder) {
+    private runWorkers(profilesToReconcile: ProfileSourceFile[], destFolder, srcFolders: string[]) {
         let workerCount = 0;
         let finishedWorkerCount = 0;
         let chunk = 10; // One worker to process 10 profiles
@@ -78,6 +80,7 @@ export default class ProfileReconcile extends ProfileActions {
                         loglevel: SFPLogger.logLevel,
                         isJsonFormatEnabled: Sfpowerkit.isJsonFormatEnabled,
                         isSourceOnly: MetadataFiles.sourceOnly,
+                        srcFolders: srcFolders,
                         path: reconcileWorkerFile,
                     };
                     const worker = new Worker(path.resolve(__dirname, './worker.js'), {
