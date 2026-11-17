@@ -16,7 +16,11 @@ import _ from 'lodash';
 
 export default class ReconcileWorker {
     conn: Connection;
-    public constructor(private targetOrg: string, private isSourceOnly: boolean) {}
+    public constructor(
+        private targetOrg: string,
+        private isSourceOnly: boolean,
+        private srcFolders: string[]
+    ) {}
 
     public async reconcile(profilesToReconcile: ProfileSourceFile[], destFolder: string) {
         //Init Cache for each worker thread from file system
@@ -26,10 +30,14 @@ export default class ReconcileWorker {
         if (this.targetOrg) {
             const org = await Org.create({ aliasOrUsername: this.targetOrg });
             this.conn = org.getConnection();
-        } else {
-            //Load all local components from source to database
-            await this.loadAllLocalComponents();
         }
+
+        // Load the local components into the cache regardless of whether an org is connected.
+        // Every reconcile step asks isComponentExistsInProjectDirectoryOrInOrg, so a component
+        // that is about to be deployed from this source must count as existing: otherwise a
+        // profile is stripped of permissions on the very metadata it ships alongside, and the
+        // caller has to reconcile and deploy a second time once the org has caught up.
+        await this.loadAllLocalComponents();
 
         let result: string[] = [];
         for (let count = 0; count < profilesToReconcile.length; count++) {
@@ -41,15 +49,50 @@ export default class ReconcileWorker {
 
     private async loadAllLocalComponents() {
         const resolver = new MetadataResolver();
-        const project = await SfProject.resolve();
-        let packageDirectories = project.getPackageDirectories();
 
-        for (const packageDirectory of packageDirectories) {
-            const components = resolver.getComponentsFromPath(packageDirectory.path);
-            for (const component of components) {
-                this.loadComponentsTocache(component);
+        for (const packageDirectory of await this.resolvePackageDirectories()) {
+            try {
+                const components = resolver.getComponentsFromPath(packageDirectory);
+                for (const component of components) {
+                    this.loadComponentsTocache(component);
+                }
+            } catch (error) {
+                // A directory that holds no resolvable metadata is not an error here, it just
+                // contributes nothing to the cache. Reconcile then falls back to the org.
+                SFPLogger.log(
+                    `Unable to load local components from ${packageDirectory}: ${error.message}`,
+                    LoggerLevel.DEBUG
+                );
             }
         }
+    }
+
+    /**
+     * The absolute package directories to scan for local components.
+     *
+     * srcFolders reaches us as either a project root (sfp reconciles an unpacked artifact) or a
+     * package directory (`sfp profile:reconcile --folder force-app`), so each entry is expanded
+     * through its own sfdx-project.json when it has one and taken as-is when it does not. The
+     * paths must be absolute: this runs on a worker thread whose cwd is the caller's, not the
+     * folder being reconciled.
+     */
+    private async resolvePackageDirectories(): Promise<string[]> {
+        const roots = this.srcFolders?.length > 0 ? this.srcFolders : [process.cwd()];
+        const packageDirectories: string[] = [];
+
+        for (const root of roots) {
+            const absoluteRoot = path.resolve(root);
+            if (fs.existsSync(path.join(absoluteRoot, 'sfdx-project.json'))) {
+                const project = await SfProject.resolve(absoluteRoot);
+                for (const packageDirectory of project.getPackageDirectories()) {
+                    packageDirectories.push(packageDirectory.fullPath);
+                }
+            } else {
+                packageDirectories.push(absoluteRoot);
+            }
+        }
+
+        return packageDirectories;
     }
 
     private loadComponentsTocache(component:SourceComponent){
@@ -106,7 +149,7 @@ export default class ReconcileWorker {
 
 Sfpowerkit.setLogLevel(workerData.loglevel, workerData.isJsonFormatEnabled);
 
-let reconcileWorker = new ReconcileWorker(workerData.targetOrg, workerData.isSourceOnly);
+let reconcileWorker = new ReconcileWorker(workerData.targetOrg, workerData.isSourceOnly, workerData.srcFolders);
 reconcileWorker.reconcile(workerData.profileChunk, workerData.destFolder).then((result) => {
     parentPort.postMessage(result);
 })
